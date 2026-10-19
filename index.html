@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F4C20D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Herd Scout</title>
+<style>
+/* Layout: one-thumb phone app. Sticky header, four bottom tabs, bottom sheets for detail and forms.
+   Palette: daylight-readable greens, ear-tag yellow as the single accent. System fonts so it works offline. */
+:root{
+  --bg:#EBEFE8; --surface:#FFFFFF; --surface2:#F4F7F2; --ink:#14201A; --muted:#566559; --line:#D3DBD0;
+  --accent:#F4C20D; --accent-ink:#1B1600; --ok:#177A42; --warn:#A86200; --bad:#B53A2E; --cam:#0E1511;
+  --shadow:0 1px 2px rgba(20,32,26,.08),0 8px 24px rgba(20,32,26,.10);
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1511; --surface:#182019; --surface2:#1F2A21; --ink:#EDF2EA; --muted:#97A59B; --line:#2B382D;
+  --ok:#4CC27F; --warn:#E3A33B; --bad:#F0705F; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark;}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 var(--sans);
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px));
+  -webkit-text-size-adjust:100%;overscroll-behavior:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;text-align:left}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;letter-spacing:-.01em;text-wrap:balance}
+.muted{color:var(--muted)} .tnum{font-variant-numeric:tabular-nums}
+
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  background:var(--bg);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.02em}
+.tagmark{width:22px;height:28px;border-radius:7px 7px 9px 9px;background:var(--accent);position:relative;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
+.tagmark::before{content:"";position:absolute;left:50%;top:4px;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:var(--bg)}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:600;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.pill.ok .dot{background:var(--ok)} .pill.warn .dot{background:var(--warn)}
+
+main{padding:14px max(16px,env(safe-area-inset-right,0px)) calc(96px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-width:720px;margin:0 auto}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:12px;font-size:12px;font-weight:600;color:var(--muted);text-align:center}
+.tab svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-current="true"]{color:var(--ink);background:var(--accent)}
+.tab[aria-current="true"]{color:var(--accent-ink)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
+.card h3{font-size:15px;margin-bottom:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 18px;border-radius:12px;font-weight:700;background:var(--ink);color:var(--bg);text-align:center}
+.btn.accent{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:var(--surface2);color:var(--bad);border:1px solid var(--line)}
+.btn.wide{width:100%} .btn.sm{min-height:38px;padding:0 12px;font-size:14px}
+.btn[disabled]{opacity:.5}
+
+/* Scan */
+.vf{position:relative;border-radius:18px;overflow:hidden;background:var(--cam);aspect-ratio:4/5;max-height:62vh;width:100%;margin:0 auto}
+.vf video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.frame{position:absolute;left:6%;right:6%;top:50%;transform:translateY(-50%);aspect-ratio:1;pointer-events:none}
+.frame i{position:absolute;width:34px;height:34px;border:4px solid var(--accent)}
+.frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.frame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.frame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.frame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 14px 0}
+.vf-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;color:#E8EFE6}
+.vf-msg p{margin:0;max-width:30ch;color:#B9C6BC}
+.look{position:absolute;left:10px;right:10px;bottom:10px;padding:7px 12px;border-radius:10px;background:rgba(10,15,12,.72);color:#E8EFE6;font-size:13px;font-family:var(--mono)}
+.controls{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin:14px 0}
+.shutter{width:78px;height:78px;border-radius:50%;background:var(--accent);border:6px solid var(--surface);box-shadow:0 0 0 3px var(--ink),var(--shadow)}
+.shutter:active{transform:scale(.95)}
+.sw{display:flex;align-items:center;gap:10px;justify-self:end;font-weight:700;font-size:14px}
+.sw input{appearance:none;width:52px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .15s;margin:0}
+.sw input::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.sw input:checked{background:var(--ok)} .sw input:checked::after{transform:translateX(22px)}
+.walk{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.walk b{display:block;font-size:17px}
+.recent{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.etag{display:inline-block;position:relative;padding:2px 9px 2px 9px;border-radius:6px;background:var(--accent);color:var(--accent-ink);font:700 14px var(--mono);letter-spacing:.02em;white-space:nowrap}
+.hint{font-size:13px;color:var(--muted);margin:6px 2px 0}
+
+/* Herd list */
+.search{width:100%;min-height:50px;padding:0 16px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 0 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:14px;display:inline-flex;align-items:center}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.count{margin:10px 2px;font-size:14px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:56px 1fr auto;align-items:center;gap:12px;padding:10px;border-radius:14px;background:var(--surface);border:1px solid var(--line);width:100%}
+.row .ph,.cand .ph{width:56px;height:56px;border-radius:12px;object-fit:cover;background:var(--surface2);display:block}
+.ph.empty{display:flex;align-items:center;justify-content:center;color:var(--muted);font:700 12px var(--mono)}
+.r1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.r2{font-size:13px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.rside{font-size:12px;color:var(--muted);text-align:right}
+.empty-state{padding:28px 16px;text-align:center;color:var(--muted)}
+.empty-state b{display:block;color:var(--ink);margin-bottom:6px;font-size:17px}
+
+/* Sheet */
+#scrim{position:fixed;inset:0;z-index:40;background:rgba(8,12,9,.55)}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-height:92%;overflow-y:auto;background:var(--bg);border-radius:22px 22px 0 0;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  box-shadow:var(--shadow);max-width:720px;margin:0 auto}
+.sh-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;position:sticky;top:-16px;background:var(--bg);padding:2px 0 8px;z-index:1}
+.sh-head h2{font-size:20px}
+.x{padding:8px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-weight:700;font-size:14px}
+.photos{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+.photos img{width:92px;height:92px;border-radius:12px;object-fit:cover;flex:none}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+.kv dt{color:var(--muted);font-size:14px} .kv dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sub{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+.item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);margin-bottom:6px;width:100%}
+.item .l{min-width:0;overflow-wrap:anywhere}
+.cand{display:grid;grid-template-columns:56px 1fr auto;align-items:center;gap:12px;padding:10px;border-radius:14px;background:var(--surface);border:2px solid var(--line);width:100%;margin-bottom:8px}
+.cand.best{border-color:var(--accent)}
+.score{font:700 14px var(--mono);color:var(--muted)}
+.capimg{width:100%;max-width:200px;border-radius:14px;display:block;margin:0 0 10px}
+form{display:grid;gap:12px}
+label.f{display:grid;gap:5px;font-size:14px;font-weight:600}
+label.f input,label.f select,label.f textarea{min-height:46px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:400;width:100%}
+label.f textarea{min-height:90px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chk{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+.chk input{width:22px;height:22px;accent-color:var(--ok)}
+.field-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin-bottom:10px}
+.big-num{font:700 22px var(--mono)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top,0px));z-index:60;max-width:min(92vw,520px);
+  display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:14px;background:var(--ink);color:var(--bg);font-weight:700;box-shadow:var(--shadow)}
+#toast button{color:var(--accent);font-weight:800;padding:4px 8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="tagmark" aria-hidden="true"></span>Herd Scout</div>
+  <button class="pill" id="net" data-act="tab" data-tab="set" aria-label="Sync status"><span class="dot"></span><span id="netTxt">…</span></button>
+</header>
+
+<main>
+  <section id="v-scan">
+    <div class="vf" id="vf">
+      <video id="video" playsinline muted autoplay hidden></video>
+      <div class="frame" id="frame" hidden><i></i><i></i><i></i><i></i></div>
+      <div class="vf-msg" id="vfMsg">
+        <h2 style="color:#F2F6F0">Ready to scan</h2>
+        <p id="vfText">Fill the frame with the animal's face, head-on. Works with no signal.</p>
+        <button class="btn accent" data-act="camOn">Start camera</button>
+        <button class="btn ghost sm" data-act="camApp">Use phone camera app</button>
+      </div>
+      <div class="look" id="look" hidden></div>
+    </div>
+    <div class="controls">
+      <button class="btn ghost sm" data-act="camApp" aria-label="Take a photo with the phone camera app" style="justify-self:start">Camera app</button>
+      <button class="shutter" id="shutter" data-act="shoot" aria-label="Scan this animal"></button>
+      <label class="sw"><span>Auto</span><input type="checkbox" id="autoT" aria-label="Auto-scan every second or two"></label>
+    </div>
+    <div class="card" id="walk"></div>
+    <p class="hint">Tip: add 3–5 photos per animal from the angles you'll usually see. Confirmed matches add themselves to her photos over time.</p>
+  </section>
+
+  <section id="v-herd" hidden>
+    <input class="search" id="q" type="search" placeholder="Search tag, name, calf, notes, date…" autocomplete="off" aria-label="Search the herd">
+    <div class="chips" id="chips"></div>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+    <div class="acts"><button class="btn accent wide" data-act="newCow">Add animal</button></div>
+  </section>
+
+  <section id="v-walks" hidden></section>
+  <section id="v-set" hidden></section>
+</main>
+
+<nav class="tabs" aria-label="Sections">
+  <button class="tab" data-act="tab" data-tab="scan"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.4h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.6"/></svg>Scan</button>
+  <button class="tab" data-act="tab" data-tab="herd"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Herd</button>
+  <button class="tab" data-act="tab" data-tab="walks"><svg viewBox="0 0 24 24"><path d="M4 19c3-9 6 1 9-7s5-6 7-6"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="6" r="1.5"/></svg>Walks</button>
+  <button class="tab" data-act="tab" data-tab="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Settings</button>
+</nav>
+
+<div id="scrim" hidden></div>
+<div id="sheet" hidden role="dialog" aria-modal="true" aria-label="Details"></div>
+<div id="toast" hidden role="status"></div>
+<input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+<input type="file" id="fGal" accept="image/*" multiple hidden>
+<input type="file" id="fImp" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ============ helpers ============ */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+const DAY = 864e5;
+const parseD = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const fmtDate = s => s ? parseD(s).toLocaleDateString([], {year: 'numeric', month: 'short', day: 'numeric'}) : '—';
+const fmtDT = t => t ? new Date(t).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : '—';
+const fmtT = t => new Date(t).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+function ageMonths(b) { const d = parseD(b), n = new Date(); let m = (n.getFullYear() - d.getFullYear()) * 12 + n.getMonth() - d.getMonth(); if (n.getDate() < d.getDate()) m--; return Math.max(0, m); }
+function ageText(c) {
+  if (!c.birth) return 'age unknown';
+  const m = ageMonths(c.birth);
+  if (m < 1) { const days = Math.max(0, Math.floor((Date.now() - parseD(c.birth)) / DAY)); return days + ' d old'; }
+  if (m < 24) return m + ' mo old';
+  const y = Math.floor(m / 12), r = m % 12;
+  return (r ? y + ' y ' + r + ' mo' : y + ' y') + ' old';
+}
+function ago(t) {
+  if (!t) return 'never seen';
+  const d = Math.floor((Date.now() - t) / DAY);
+  if (d <= 0) return 'seen today';
+  return d === 1 ? 'seen yesterday' : 'seen ' + d + ' d ago';
+}
+const sexWord = s => s === 'M' ? 'Male' : 'Female';
+const calfWord = s => s === 'M' ? 'Bull calf' : 'Heifer calf';
+const label = c => ((c.tag ? '#' + c.tag : '') + (c.name ? ' ' + c.name : '')).trim() || 'Unnamed';
+const etag = c => c.tag ? `<span class="etag">${esc(c.tag)}</span>` : '';
+
+/* ============ storage (IndexedDB with in-memory fallback) ============ */
+const STORES = ['cows', 'sessions', 'sightings', 'outbox', 'meta'];
+const DB = {
+  mode: 'idb', db: null, mem: {}, seq: 1,
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open('herdscout', 1);
+        r.onupgradeneeded = () => {
+          const d = r.result;
+          d.createObjectStore('cows', {keyPath: 'id'});
+          d.createObjectStore('sessions', {keyPath: 'id'});
+          d.createObjectStore('sightings', {keyPath: 'id'});
+          d.createObjectStore('outbox', {keyPath: 'seq', autoIncrement: true});
+          d.createObjectStore('meta', {keyPath: 'k'});
+        };
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+        r.onblocked = () => rej(new Error('blocked'));
+      });
+    } catch (e) {
+      this.mode = 'mem';
+      STORES.forEach(s => this.mem[s] = new Map());
+    }
+  },
+  _tx(s, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(s, mode), st = t.objectStore(s);
+      let r;
+      try { r = fn(st); } catch (e) { rej(e); return; }
+      t.oncomplete = () => res(r && 'result' in r ? r.result : undefined);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  },
+  async all(s) { return this.mode === 'mem' ? [...this.mem[s].values()] : this._tx(s, 'readonly', st => st.getAll()); },
+  async get(s, k) { return this.mode === 'mem' ? this.mem[s].get(k) : this._tx(s, 'readonly', st => st.get(k)); },
+  async put(s, v) {
+    if (this.mode === 'mem') { if (s === 'outbox') v.seq = this.seq++; this.mem[s].set(s === 'meta' ? v.k : (s === 'outbox' ? v.seq : v.id), v); return; }
+    return this._tx(s, 'readwrite', st => st.put(v));
+  },
+  async putMany(s, vals) {
+    if (this.mode === 'mem') { for (const v of vals) await this.put(s, v); return; }
+    return this._tx(s, 'readwrite', st => { vals.forEach(v => st.put(v)); });
+  },
+  async del(s, k) { return this.mode === 'mem' ? void this.mem[s].delete(k) : this._tx(s, 'readwrite', st => st.delete(k)); },
+  async delMany(s, keys) {
+    if (this.mode === 'mem') { keys.forEach(k => this.mem[s].delete(k)); return; }
+    return this._tx(s, 'readwrite', st => { keys.forEach(k => st.delete(k)); });
+  },
+  async clear(s) { return this.mode === 'mem' ? void this.mem[s].clear() : this._tx(s, 'readwrite', st => st.clear()); }
+};
+
+/* ============ state ============ */
+const DEF = {thr: 0.80, margin: 0.03, autoMs: 1500, gps: true, quick: true, learn: true, endpoint: '', token: '', device: 'Phone 1', field: ''};
+const S = {
+  cows: [], sessions: [], sightings: [], pending: 0, set: {...DEF}, tab: 'scan', q: '', chip: 'all',
+  session: null, lastSeen: {}, online: navigator.onLine, lastSync: null, syncErr: '',
+  auto: false, photoTarget: null, frame: null, fix: null, pos: null, calib: null
+};
+const cowById = id => S.cows.find(c => c.id === id);
+function calcSeen() {
+  S.lastSeen = {};
+  for (const s of S.sightings) if (!S.lastSeen[s.cowId] || s.lastTs > S.lastSeen[s.cowId]) S.lastSeen[s.cowId] = s.lastTs;
+}
+async function saveSettings() { await DB.put('meta', {k: 'settings', v: S.set}); }
+
+/* ============ sync outbox ============ */
+function cowPayload(c) {
+  return {...c, photos: (c.photos || []).slice(0, 1).map(p => ({id: p.id, thumb: p.thumb})), photoCount: (c.photos || []).length};
+}
+async function queue(type, payload) {
+  if (!S.set.endpoint) return;
+  await DB.put('outbox', {type, payload, ts: Date.now()});
+  S.pending++; renderNet(); trySync();
+}
+async function enqueueAll() {
+  if (!S.set.endpoint) return;
+  const items = [
+    ...S.cows.map(c => ({type: 'cow', payload: cowPayload(c), ts: Date.now()})),
+    ...S.sessions.map(s => ({type: 'session', payload: s, ts: Date.now()})),
+    ...S.sightings.map(s => ({type: 'sighting', payload: s, ts: Date.now()}))
+  ];
+  for (const it of items) await DB.put('outbox', it);
+  S.pending = (await DB.all('outbox')).length; renderNet(); trySync();
+}
+let syncing = false;
+async function sync(manual) {
+  if (!S.set.endpoint) { if (manual) toast('Add a sync address in Settings first'); return; }
+  if (syncing) return;
+  syncing = true; S.syncErr = ''; renderNet();
+  try {
+    const items = (await DB.all('outbox')).sort((a, b) => a.seq - b.seq);
+    for (let i = 0; i < items.length; i += 40) {
+      const batch = items.slice(i, i + 40);
+      const res = await fetch(S.set.endpoint, {
+        method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({token: S.set.token, device: S.set.device, sentAt: Date.now(), items: batch.map(b => ({type: b.type, ts: b.ts, payload: b.payload}))})
+      });
+      if (!res.ok) throw new Error('Server said ' + res.status);
+      await DB.delMany('outbox', batch.map(b => b.seq));
+    }
+    S.lastSync = Date.now();
+    await DB.put('meta', {k: 'lastSync', v: S.lastSync});
+    if (manual) toast(items.length ? 'Synced ' + items.length + ' changes' : 'Nothing waiting to sync');
+  } catch (e) {
+    S.syncErr = e.message || 'Could not reach server';
+    if (manual) toast('Sync failed: ' + S.syncErr);
+  } finally {
+    syncing = false;
+    S.pending = (await DB.all('outbox')).length;
+    renderNet(); if (S.tab === 'set') renderSettings();
+  }
+}
+let syncTimer = null;
+function trySync() { clearTimeout(syncTimer); syncTimer = setTimeout(() => { if (navigator.onLine) sync(false); }, 1500); }
+
+/* ============ recognition ============ */
+/* A small on-device descriptor: coat colour layout + edge orientation histogram + coarse brightness pattern.
+   It needs no download and works offline. Accuracy depends on consistent framing, so enroll several photos per animal. */
+const SZ = 64, CROP = 0.88;
+const work = document.createElement('canvas'); work.width = work.height = SZ;
+const wctx = work.getContext('2d', {willReadFrequently: true});
+function unit(a) { let n = 0; for (let i = 0; i < a.length; i++) n += a[i] * a[i]; n = Math.sqrt(n) || 1; for (let i = 0; i < a.length; i++) a[i] /= n; }
+function describe(src, sw, sh) {
+  const s = Math.min(sw, sh) * CROP, sx = (sw - s) / 2, sy = (sh - s) / 2;
+  wctx.drawImage(src, sx, sy, s, s, 0, 0, SZ, SZ);
+  const d = wctx.getImageData(0, 0, SZ, SZ).data, n = SZ * SZ, g = new Float32Array(n);
+  for (let i = 0; i < n; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  // A: 8x8 colour layout, per-channel mean removed so light/tint shifts matter less
+  const A = new Float32Array(192), cell = SZ / 8;
+  for (let cy = 0; cy < 8; cy++) for (let cx = 0; cx < 8; cx++) {
+    let r = 0, gg = 0, b = 0;
+    for (let y = 0; y < cell; y++) for (let x = 0; x < cell; x++) { const p = ((cy * cell + y) * SZ + cx * cell + x) * 4; r += d[p]; gg += d[p + 1]; b += d[p + 2]; }
+    const k = (cy * 8 + cx) * 3, c = cell * cell; A[k] = r / c; A[k + 1] = gg / c; A[k + 2] = b / c;
+  }
+  for (let ch = 0; ch < 3; ch++) { let m = 0; for (let i = ch; i < 192; i += 3) m += A[i]; m /= 64; for (let i = ch; i < 192; i += 3) A[i] -= m; }
+  unit(A);
+  // B: edge orientation histogram (8x8 cells x 8 bins)
+  const H = new Float32Array(512); let magSum = 0;
+  for (let y = 1; y < SZ - 1; y++) for (let x = 1; x < SZ - 1; x++) {
+    const gx = g[y * SZ + x + 1] - g[y * SZ + x - 1], gy = g[(y + 1) * SZ + x] - g[(y - 1) * SZ + x];
+    const m = Math.hypot(gx, gy); magSum += m;
+    let a = Math.atan2(gy, gx); if (a < 0) a += Math.PI;
+    H[(((y >> 3) * 8) + (x >> 3)) * 8 + Math.min(7, Math.floor(a / Math.PI * 8))] += m;
+  }
+  for (let i = 0; i < 512; i++) H[i] = Math.sqrt(H[i]);
+  unit(H);
+  // C: 16x16 brightness pattern (spots, blazes, patches)
+  const C = new Float32Array(256);
+  for (let by = 0; by < 16; by++) for (let bx = 0; bx < 16; bx++) {
+    let t = 0; for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) t += g[(by * 4 + y) * SZ + bx * 4 + x];
+    C[by * 16 + bx] = t / 16;
+  }
+  let cm = 0; for (let i = 0; i < 256; i++) cm += C[i]; cm /= 256; for (let i = 0; i < 256; i++) C[i] -= cm;
+  unit(C);
+  const v = new Float32Array(960);
+  for (let i = 0; i < 192; i++) v[i] = A[i] * 0.8;
+  for (let i = 0; i < 512; i++) v[192 + i] = H[i];
+  for (let i = 0; i < 256; i++) v[704 + i] = C[i] * 0.9;
+  unit(v);
+  return {vec: v, energy: magSum / n};
+}
+function makeThumb(src, sw, sh) {
+  const s = Math.min(sw, sh) * CROP, sx = (sw - s) / 2, sy = (sh - s) / 2;
+  const c = document.createElement('canvas'); c.width = c.height = 192;
+  c.getContext('2d').drawImage(src, sx, sy, s, s, 0, 0, 192, 192);
+  return c.toDataURL('image/jpeg', 0.72);
+}
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function rank(vec) {
+  const out = [];
+  for (const c of S.cows) {
+    if (c.status !== 'active') continue;
+    let best = -2;
+    for (const p of c.photos || []) if (p.vec) { const s = dot(vec, p.vec); if (s > best) best = s; }
+    if (best > -2) out.push({cow: c, score: best});
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+const isConfident = r => r.length && r[0].score >= S.set.thr && (r.length < 2 || r[0].score - r[1].score >= S.set.margin);
+
+/* ============ camera ============ */
+const video = $('#video');
+let stream = null, wake = null, busy = false, autoTimer = null;
+async function camOn() {
+  if (stream) return;
+  if (!navigator.mediaDevices?.getUserMedia) { vfMessage('Live camera needs a secure (https) page. Use the phone camera app button instead.'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1280}, height: {ideal: 1280}}, audio: false});
+    video.srcObject = stream; await video.play();
+    video.hidden = false; $('#frame').hidden = false; $('#vfMsg').hidden = true; $('#look').hidden = false;
+    try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    startAuto();
+  } catch (e) {
+    stream = null; vfMessage('Camera blocked or unavailable. Allow camera access, or use the phone camera app button.');
+  }
+}
+function camOff() {
+  stream?.getTracks().forEach(t => t.stop()); stream = null;
+  try { wake?.release(); } catch (e) {} wake = null;
+  video.hidden = true; $('#frame').hidden = true; $('#look').hidden = true; $('#vfMsg').hidden = false;
+  clearInterval(autoTimer);
+}
+function vfMessage(t) { $('#vfText').textContent = t; $('#vfMsg').hidden = false; }
+function startAuto() {
+  clearInterval(autoTimer);
+  autoTimer = setInterval(async () => {
+    if (!S.auto || !stream || busy || document.hidden || S.tab !== 'scan' || !$('#sheet').hidden || !video.videoWidth) return;
+    busy = true;
+    try { await scanFrame(video, video.videoWidth, video.videoHeight, 'auto'); } finally { busy = false; }
+  }, Math.max(700, S.set.autoMs));
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (stream) { camOff(); S.camWanted = true; } }
+  else if (S.camWanted && S.tab === 'scan') { S.camWanted = false; camOn(); }
+});
+
+async function scanFrame(src, sw, sh, mode) {
+  const {vec, energy} = describe(src, sw, sh);
+  if (energy < 2) { if (mode === 'manual') toast('That frame looks empty. Move closer to the face.'); return; }
+  const enrolled = S.cows.some(c => c.status === 'active' && (c.photos || []).length);
+  if (!enrolled) { if (mode === 'manual') openNewAnimal({vec, thumb: makeThumb(src, sw, sh)}, null); return; }
+  const ranked = rank(vec), top = ranked[0];
+  setLook(top);
+  if (isConfident(ranked) && (mode === 'auto' || S.set.quick)) {
+    const frame = {vec, thumb: makeThumb(src, sw, sh)};
+    const rec = await recordSighting(top.cow, top.score, mode);
+    if (rec.isNew) {
+      navigator.vibrate?.(40);
+      toast('✓ ' + label(top.cow), {action: 'Wrong?', fn: () => openResult(frame, ranked, {cowId: top.cow.id, sid: rec.sid, wasNew: true})});
+    } else if (mode === 'manual') toast(label(top.cow) + ' is already counted on this walk');
+    return;
+  }
+  if (mode === 'manual') openResult({vec, thumb: makeThumb(src, sw, sh)}, ranked, null);
+}
+function setLook(top) {
+  $('#look').textContent = top ? `Best guess ${label(top.cow)} · ${top.score.toFixed(2)}` : 'No animals enrolled yet';
+}
+
+/* ============ walks and sightings ============ */
+let gpsTimer = null;
+function pollGps() {
+  clearInterval(gpsTimer);
+  if (!S.session || !S.set.gps || !navigator.geolocation) return;
+  const go = () => navigator.geolocation.getCurrentPosition(p => { S.pos = {lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), t: Date.now()}; }, () => {}, {maximumAge: 30000, timeout: 8000, enableHighAccuracy: true});
+  go(); gpsTimer = setInterval(go, 20000);
+}
+async function startWalk(name) {
+  const s = {id: uid(), name: (name || S.set.field || 'Field walk').trim(), start: Date.now(), end: null, device: S.set.device};
+  S.sessions.push(s); S.session = s;
+  await DB.put('sessions', s); queue('session', s); pollGps(); renderWalk();
+  return s;
+}
+async function endWalk() {
+  if (!S.session) return;
+  const s = S.session; s.end = Date.now(); S.session = null; clearInterval(gpsTimer);
+  await DB.put('sessions', s); queue('session', s); renderWalk(); renderWalks(); openWalk(s.id);
+}
+async function recordSighting(cow, score, method) {
+  const s = S.session || await startWalk();
+  const id = s.id + ':' + cow.id, now = Date.now();
+  let sg = S.sightings.find(x => x.id === id), isNew = false;
+  const pos = S.pos && now - S.pos.t < 90000 ? {lat: S.pos.lat, lng: S.pos.lng} : {};
+  if (!sg) {
+    isNew = true;
+    sg = {id, sessionId: s.id, cowId: cow.id, firstTs: now, lastTs: now, count: 1, score: +score.toFixed(3), method, ...pos};
+    S.sightings.push(sg);
+  } else { sg.count++; sg.lastTs = now; }
+  S.lastSeen[cow.id] = now;
+  await DB.put('sightings', sg); queue('sighting', sg); renderWalk();
+  return {isNew, sid: s.id};
+}
+async function undoSighting(cowId, sid) {
+  const id = sid + ':' + cowId, sg = S.sightings.find(x => x.id === id);
+  if (!sg) return;
+  sg.count--;
+  if (sg.count <= 0) {
+    S.sightings = S.sightings.filter(x => x.id !== id);
+    await DB.del('sightings', id); queue('sighting_delete', {id});
+  } else { await DB.put('sightings', sg); queue('sighting', sg); }
+  calcSeen();
+}
+
+/* ============ cows ============ */
+async function saveCow(c) {
+  c.updated = Date.now();
+  const i = S.cows.findIndex(x => x.id === c.id);
+  if (i >= 0) S.cows[i] = c; else S.cows.push(c);
+  await DB.put('cows', c); queue('cow', cowPayload(c));
+}
+async function addPhoto(c, frame) {
+  c.photos = c.photos || [];
+  c.photos.push({id: uid(), thumb: frame.thumb, vec: frame.vec, ts: Date.now()});
+  while (c.photos.length > 8) c.photos.splice(1, 1); // keep the first (reference) photo, drop the oldest after it
+  await saveCow(c);
+}
+const hasCalfAtSide = c => (c.calves || []).some(k => k.date && Date.now() - parseD(k.date) < 240 * DAY);
+const damOf = c => c.damId ? cowById(c.damId) : null;
+function hay(c) {
+  const d = damOf(c);
+  return [c.tag, c.name, c.breed, c.notes, c.sex === 'F' ? 'female cow heifer' : 'male bull steer', c.status, c.birth, d ? 'dam ' + d.tag + ' ' + d.name : '',
+    ...(c.calves || []).map(k => [k.tag, k.name, k.date, k.sex === 'F' ? 'heifer calf female' : 'bull calf male', k.notes].join(' '))].join(' ').toLowerCase();
+}
+function filteredCows() {
+  const terms = S.q.toLowerCase().split(/\s+/).filter(Boolean);
+  let list = S.cows.filter(c => {
+    const inactive = c.status !== 'active';
+    if (S.chip === 'inactive') return inactive;
+    if (inactive) return false;
+    if (S.chip === 'calf') return hasCalfAtSide(c);
+    if (S.chip === 'bulls') return c.sex === 'M';
+    if (S.chip === 'young') return c.birth && ageMonths(c.birth) < 12;
+    if (S.chip === 'unseen') { const t = S.lastSeen[c.id]; return !t || Date.now() - t > 7 * DAY; }
+    return true;
+  });
+  if (terms.length) list = list.filter(c => { const h = hay(c); return terms.every(t => h.includes(t)); });
+  return list.sort((a, b) => (a.tag || a.name || '').localeCompare(b.tag || b.name || '', undefined, {numeric: true}));
+}
+
+/* ============ rendering ============ */
+function toast(msg, opt) {
+  const t = $('#toast'); clearTimeout(toast.t);
+  t.innerHTML = `<span>${esc(msg)}</span>` + (opt?.action ? `<button data-act="toastAct">${esc(opt.action)}</button>` : '');
+  toast.fn = opt?.fn; t.hidden = false;
+  toast.t = setTimeout(() => t.hidden = true, opt?.action ? 6000 : 3000);
+}
+function renderNet() {
+  const el = $('#net'); let txt, cls = '';
+  if (syncing) { txt = 'Syncing…'; cls = 'warn'; }
+  else if (!S.set.endpoint) { txt = 'Saved on this phone'; }
+  else if (!navigator.onLine) { txt = 'Offline · ' + S.pending + ' saved'; cls = 'warn'; }
+  else if (S.pending) { txt = S.pending + ' waiting to sync'; cls = 'warn'; }
+  else { txt = 'Synced'; cls = 'ok'; }
+  el.className = 'pill ' + cls; $('#netTxt').textContent = txt;
+}
+function thumbOf(c, cls = 'ph') {
+  const p = (c.photos || [])[0];
+  return p ? `<img class="${cls}" src="${p.thumb}" alt="">` : `<div class="${cls} empty">${esc((c.tag || c.name || '?').slice(0, 4))}</div>`;
+}
+function renderWalk() {
+  const el = $('#walk');
+  if (S.session) {
+    const mine = S.sightings.filter(x => x.sessionId === S.session.id).sort((a, b) => b.lastTs - a.lastTs);
+    el.innerHTML = `<div class="walk"><div><b>${esc(S.session.name)}</b><span class="muted tnum">Since ${fmtT(S.session.start)} · <b style="display:inline">${mine.length}</b> head counted</span></div>
+      <button class="btn danger sm" data-act="endWalk">End walk</button></div>
+      <div class="recent">${mine.slice(0, 10).map(x => { const c = cowById(x.cowId); return c ? (c.tag ? etag(c) : `<span class="etag">${esc(c.name)}</span>`) : ''; }).join('') || '<span class="muted">Nothing counted yet. Scan an animal.</span>'}</div>`;
+  } else {
+    el.innerHTML = `<h3>Field walk</h3>
+      <div class="field-row"><input class="search" id="field" placeholder="Field or pasture name" value="${esc(S.set.field)}" aria-label="Field name"><button class="btn accent" data-act="startWalk">Start walk</button></div>
+      <span class="muted">Your first scan starts a walk automatically. Everyone you scan is logged as present in that field.</span>`;
+  }
+}
+const CHIPS = [['all', 'All'], ['calf', 'Calf at side'], ['bulls', 'Bulls'], ['young', 'Under 1 yr'], ['unseen', 'Not seen 7 d'], ['inactive', 'Sold / gone']];
+function renderHerd() {
+  $('#chips').innerHTML = CHIPS.map(([k, t]) => `<button class="chip" data-act="chip" data-k="${k}" aria-pressed="${S.chip === k}">${t}</button>`).join('');
+  const list = filteredCows(), active = S.cows.filter(c => c.status === 'active');
+  $('#count').textContent = S.cows.length
+    ? `${list.length} shown · ${active.length} active head · ${active.filter(hasCalfAtSide).length} with calf at side`
+    : '';
+  $('#list').innerHTML = list.map(c => {
+    const last = (c.calves || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    const calfTxt = last ? ` · ${calfWord(last.sex).toLowerCase()} ${fmtDate(last.date)}` : '';
+    return `<button class="row" data-act="cow" data-id="${c.id}">${thumbOf(c)}
+      <div><div class="r1">${etag(c)}<b>${esc(c.name || (c.tag ? '' : 'Unnamed'))}</b></div>
+      <div class="r2">${sexWord(c.sex)} · ${esc(ageText(c))}${esc(calfTxt)}</div></div>
+      <div class="rside">${c.status === 'active' ? ago(S.lastSeen[c.id]) : esc(c.status)}</div></button>`;
+  }).join('') || (S.cows.length
+    ? `<div class="empty-state"><b>No match</b>Try fewer words, or a different filter.</div>`
+    : `<div class="empty-state"><b>Your herd is empty</b>Add an animal with her photo, or scan one on the Scan tab and choose "add new animal".</div>`);
+}
+function renderWalks() {
+  const list = S.sessions.slice().sort((a, b) => b.start - a.start);
+  $('#v-walks').innerHTML = `<h2 style="margin:4px 0 12px">Field walks</h2><div class="list">` + (list.map(s => {
+    const n = S.sightings.filter(x => x.sessionId === s.id).length;
+    return `<button class="item" data-act="walk" data-id="${s.id}"><div class="l"><b>${esc(s.name)}</b><div class="r2">${fmtDT(s.start)}${s.end ? ' – ' + fmtT(s.end) : ' · in progress'}</div></div><span class="big-num tnum">${n}</span></button>`;
+  }).join('') || `<div class="empty-state"><b>No walks yet</b>Walks are created when you scan. Each one lists who was in the field.</div>`) + `</div>`;
+}
+function renderSettings() {
+  const st = S.set, c = S.calib;
+  $('#v-set').innerHTML = `
+  <div class="card"><h3>Backup and sync</h3>
+    <p class="muted" style="margin:0 0 10px">${st.endpoint ? (navigator.onLine ? 'Connected when there is service.' : 'No service right now. Changes are kept on this phone.') : 'Everything is stored on this phone. Add a sync address to also upload when you have service.'}
+    ${S.pending ? ' <b>' + S.pending + ' changes waiting.</b>' : ''}${S.lastSync ? ' Last sync ' + fmtDT(S.lastSync) + '.' : ''}${S.syncErr ? ' <span style="color:var(--bad)">' + esc(S.syncErr) + '</span>' : ''}</p>
+    <div style="display:grid;gap:10px">
+      <label class="f">Sync address (web app URL)<input data-set="endpoint" type="url" inputmode="url" value="${esc(st.endpoint)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label class="f">Secret word<input data-set="token" type="text" value="${esc(st.token)}" autocomplete="off"></label>
+      <label class="f">This phone's name<input data-set="device" type="text" value="${esc(st.device)}"></label>
+      <button class="btn accent" data-act="syncNow">Sync now</button>
+    </div></div>
+  <div class="card"><h3>Recognition</h3>
+    <label class="f">Auto-accept at match score ${st.thr.toFixed(2)}<input data-set="thr" type="range" min="0.5" max="0.98" step="0.01" value="${st.thr}"></label>
+    <label class="f" style="margin-top:10px">Required lead over second-best ${st.margin.toFixed(2)}<input data-set="margin" type="range" min="0" max="0.15" step="0.005" value="${st.margin}"></label>
+    <label class="f" style="margin-top:10px">Auto-scan every<select data-set="autoMs">${[1000, 1500, 2500, 4000].map(v => `<option value="${v}" ${st.autoMs === v ? 'selected' : ''}>${v / 1000} seconds</option>`).join('')}</select></label>
+    <div style="display:grid;gap:10px;margin-top:12px">
+      <label class="chk"><input type="checkbox" data-set="quick" ${st.quick ? 'checked' : ''}>Shutter taps count confident matches without asking (Auto always does)</label>
+      <label class="chk"><input type="checkbox" data-set="learn" ${st.learn ? 'checked' : ''}>Add confirmed photos to each animal</label>
+      <label class="chk"><input type="checkbox" data-set="gps" ${st.gps ? 'checked' : ''}>Record location on walks</label>
+    </div>
+    <div class="acts"><button class="btn ghost" data-act="calibrate">Check my herd's numbers</button></div>
+    ${c ? `<p class="muted" style="margin:10px 0 0">${esc(c.msg)}${c.suggest ? ` <button class="btn sm accent" data-act="applyCalib">Use ${c.suggest.toFixed(2)}</button>` : ''}</p>` : ''}
+  </div>
+  <div class="card"><h3>Your data</h3>
+    <div class="acts" style="margin-top:0">
+      <button class="btn ghost" data-act="expJson">Full backup (.json)</button>
+      <button class="btn ghost" data-act="impJson">Restore backup</button>
+      <button class="btn ghost" data-act="expHerd">Herd list (.csv)</button>
+      <button class="btn ghost" data-act="expCalv">Calving log (.csv)</button>
+    </div>
+    <p class="hint">${S.cows.length} animals · ${S.sessions.length} walks · ${S.sightings.length} sightings${DB.mode === 'mem' ? ' · <b style="color:var(--bad)">Storage is unavailable in this browser window. Export a backup before closing.</b>' : ''}</p>
+    <div class="acts"><button class="btn danger sm" data-act="wipe">Erase everything on this phone</button></div>
+  </div>`;
+}
+function render() {
+  ['scan', 'herd', 'walks', 'set'].forEach(t => $('#v-' + t).hidden = S.tab !== t);
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-current', String(b.dataset.tab === S.tab)));
+  if (S.tab === 'herd') renderHerd();
+  if (S.tab === 'walks') renderWalks();
+  if (S.tab === 'set') renderSettings();
+  if (S.tab === 'scan') renderWalk();
+  renderNet();
+}
+
+/* ============ sheets ============ */
+function openSheet(html) {
+  $('#sheet').innerHTML = html; $('#sheet').hidden = false; $('#scrim').hidden = false; $('#sheet').scrollTop = 0;
+}
+function closeSheet() { $('#sheet').hidden = true; $('#scrim').hidden = true; $('#sheet').innerHTML = ''; S.frame = null; S.fix = null; }
+
+function openResult(frame, ranked, fix) {
+  S.frame = frame; S.fix = fix;
+  const top = ranked.slice(0, 3), conf = isConfident(ranked);
+  openSheet(`<div class="sh-head"><h2>Who is this?</h2><button class="x" data-act="close">Close</button></div>
+    <img class="capimg" src="${frame.thumb}" alt="Photo just taken">
+    <p class="muted" style="margin:0 0 10px">${top.length ? 'Closest matches in your herd. Tap the right one.' : 'No animals have photos yet.'}</p>
+    ${top.map((r, i) => `<button class="cand ${i === 0 && conf ? 'best' : ''}" data-act="pick" data-id="${r.cow.id}">${thumbOf(r.cow)}
+      <div><div class="r1">${etag(r.cow)}<b>${esc(r.cow.name || '')}</b></div><div class="r2">${sexWord(r.cow.sex)} · ${esc(ageText(r.cow))}</div></div><span class="score">${r.score.toFixed(2)}</span></button>`).join('')}
+    <button class="btn ghost wide" data-act="newFromFrame">None of these. Add a new animal</button>`);
+}
+async function pick(id) {
+  const cow = cowById(id), fr = S.frame, fix = S.fix;
+  if (!cow || !fr) return;
+  if (fix && fix.cowId !== id) await undoSighting(fix.cowId, fix.sid);
+  if (!fix || fix.cowId !== id) await recordSighting(cow, 1, 'manual');
+  if (S.set.learn) await addPhoto(cow, fr);
+  closeSheet(); toast('✓ ' + label(cow)); if (S.tab === 'herd') renderHerd();
+}
+
+function cowForm(c, isNew) {
+  const dams = S.cows.filter(x => x.sex === 'F' && x.id !== c.id).sort((a, b) => (a.tag || '').localeCompare(b.tag || '', undefined, {numeric: true}));
+  return `<form data-form="cow" data-id="${c.id}" data-new="${isNew ? 1 : 0}">
+    ${c.photos?.length ? `<div class="photos">${c.photos.map(p => `<img src="${p.thumb}" alt="">`).join('')}</div>` : ''}
+    <div class="two"><label class="f">Ear tag #<input id="f-tag" name="tag" value="${esc(c.tag)}" inputmode="text" autocomplete="off"></label>
+      <label class="f">Name<input id="f-name" name="name" value="${esc(c.name)}" autocomplete="off"></label></div>
+    <div class="two"><label class="f">Sex<select id="f-sex" name="sex"><option value="F" ${c.sex !== 'M' ? 'selected' : ''}>Female</option><option value="M" ${c.sex === 'M' ? 'selected' : ''}>Male</option></select></label>
+      <label class="f">Birth date<input id="f-birth" name="birth" type="date" value="${esc(c.birth || '')}"></label></div>
+    <div class="two"><label class="f">Breed<input id="f-breed" name="breed" value="${esc(c.breed)}"></label>
+      <label class="f">Status<select id="f-status" name="status">${['active', 'sold', 'deceased'].map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></label></div>
+    <label class="f">Dam (mother)<select id="f-dam" name="damId"><option value="">Unknown or not in herd</option>${dams.map(d => `<option value="${d.id}" ${c.damId === d.id ? 'selected' : ''}>${esc(label(d))}</option>`).join('')}</select></label>
+    <label class="f">Notes<textarea id="f-notes" name="notes">${esc(c.notes)}</textarea></label>
+    <button class="btn accent wide" type="submit">${isNew ? 'Save animal' : 'Save changes'}</button>
+  </form>`;
+}
+const blankCow = () => ({id: uid(), tag: '', name: '', sex: 'F', birth: '', breed: '', status: 'active', damId: '', notes: '', photos: [], calves: [], created: Date.now()});
+function openNewAnimal(frame, fix) {
+  S.frame = frame; S.fix = fix;
+  const c = blankCow(); if (frame) c.photos = [{id: uid(), thumb: frame.thumb, vec: frame.vec, ts: Date.now()}];
+  openSheet(`<div class="sh-head"><h2>New animal</h2><button class="x" data-act="close">Cancel</button></div>${cowForm(c, true)}`);
+}
+function openCow(id) {
+  const c = cowById(id); if (!c) return;
+  const dam = damOf(c), calves = (c.calves || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const kids = S.cows.filter(k => k.damId === c.id && !(c.calves || []).some(x => x.calfId === k.id));
+  const walks = S.sightings.filter(x => x.cowId === c.id).sort((a, b) => b.lastTs - a.lastTs).slice(0, 5);
+  openSheet(`<div class="sh-head"><h2>${etag(c)} ${esc(c.name || '')}</h2><button class="x" data-act="close">Close</button></div>
+    ${c.photos?.length ? `<div class="photos">${c.photos.map(p => `<img src="${p.thumb}" alt="">`).join('')}</div>` : '<p class="muted">No photos yet. Add a few so scanning can recognize her.</p>'}
+    <div class="acts"><button class="btn accent sm" data-act="photoCam" data-id="${c.id}">Take photo</button><button class="btn ghost sm" data-act="photoGal" data-id="${c.id}">From gallery</button></div>
+    <div class="sub">Details</div>
+    <dl class="kv"><dt>Sex</dt><dd>${sexWord(c.sex)}</dd><dt>Age</dt><dd>${esc(ageText(c))}</dd><dt>Born</dt><dd>${fmtDate(c.birth)}</dd>
+      <dt>Breed</dt><dd>${esc(c.breed || '—')}</dd><dt>Status</dt><dd>${esc(c.status)}</dd>
+      <dt>Dam</dt><dd>${dam ? `<button class="chip" data-act="cow" data-id="${dam.id}">${esc(label(dam))}</button>` : '—'}</dd>
+      <dt>Last seen</dt><dd>${S.lastSeen[c.id] ? fmtDT(S.lastSeen[c.id]) : 'never'}</dd></dl>
+    ${c.notes ? `<div class="sub">Notes</div><p style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere">${esc(c.notes)}</p>` : ''}
+    <div class="sub">Calves (${calves.length})</div>
+    ${calves.map(k => `<div class="item"><div class="l"><b>${calfWord(k.sex)}</b> ${fmtDate(k.date)}<div class="r2">${esc([k.tag && '#' + k.tag, k.name, k.notes].filter(Boolean).join(' · ') || 'no tag yet')}</div></div>
+      <div style="display:flex;gap:6px">${k.calfId && cowById(k.calfId) ? `<button class="chip" data-act="cow" data-id="${k.calfId}">Open</button>` : ''}<button class="chip" data-act="delCalf" data-id="${c.id}" data-k="${k.id}" aria-label="Remove this calf entry">Remove</button></div></div>`).join('') || '<p class="muted" style="margin:0">None recorded.</p>'}
+    ${kids.length ? `<p class="hint">Also linked as dam of: ${kids.map(k => esc(label(k))).join(', ')}</p>` : ''}
+    <div class="acts"><button class="btn ghost sm" data-act="addCalf" data-id="${c.id}">Add calf</button></div>
+    ${walks.length ? `<div class="sub">Recent sightings</div>` + walks.map(w => { const s = S.sessions.find(x => x.id === w.sessionId); return `<div class="item"><div class="l">${esc(s ? s.name : 'Walk')}<div class="r2">${fmtDT(w.firstTs)}</div></div></div>`; }).join('') : ''}
+    <div class="acts" style="margin-top:18px"><button class="btn ghost" data-act="editCow" data-id="${c.id}">Edit</button><button class="btn danger" data-act="delCow" data-id="${c.id}">Delete</button></div>`);
+}
+function openCalfForm(id) {
+  const c = cowById(id);
+  openSheet(`<div class="sh-head"><h2>Add calf to ${esc(label(c))}</h2><button class="x" data-act="close">Cancel</button></div>
+    <form data-form="calf" data-id="${c.id}">
+      <div class="two"><label class="f">Date of calving<input id="k-date" name="date" type="date" value="${todayStr()}" required></label>
+        <label class="f">Sex of calf<select id="k-sex" name="sex"><option value="F">Heifer</option><option value="M">Bull</option></select></label></div>
+      <div class="two"><label class="f">Calf tag #<input id="k-tag" name="tag" autocomplete="off"></label><label class="f">Name<input id="k-name" name="name" autocomplete="off"></label></div>
+      <label class="f">Notes<textarea id="k-notes" name="notes" placeholder="Assisted, weak, twin…"></textarea></label>
+      <label class="chk"><input type="checkbox" name="addHerd" checked>Also add the calf to the herd</label>
+      <button class="btn accent wide" type="submit">Save calf</button></form>`);
+}
+function openWalk(id) {
+  const s = S.sessions.find(x => x.id === id); if (!s) return;
+  const sg = S.sightings.filter(x => x.sessionId === id).sort((a, b) => a.firstTs - b.firstTs);
+  const seen = new Set(sg.map(x => x.cowId));
+  const missing = S.cows.filter(c => c.status === 'active' && !seen.has(c.id)).sort((a, b) => (a.tag || '').localeCompare(b.tag || '', undefined, {numeric: true}));
+  const withPos = sg.find(x => x.lat);
+  openSheet(`<div class="sh-head"><h2>${esc(s.name)}</h2><button class="x" data-act="close">Close</button></div>
+    <p class="muted" style="margin:0">${fmtDT(s.start)}${s.end ? ' to ' + fmtT(s.end) : ' · in progress'}${withPos ? ` · <a href="https://maps.google.com/?q=${withPos.lat},${withPos.lng}" target="_blank" rel="noopener">Map</a>` : ''}</p>
+    <div class="two" style="margin-top:12px"><div class="card" style="margin:0"><div class="big-num tnum">${sg.length}</div><div class="muted">in the field</div></div>
+      <div class="card" style="margin:0"><div class="big-num tnum">${missing.length}</div><div class="muted">not seen</div></div></div>
+    <div class="sub">Seen</div>
+    ${sg.map(x => { const c = cowById(x.cowId); return c ? `<button class="item" data-act="cow" data-id="${c.id}"><div class="l">${etag(c)} <b>${esc(c.name || '')}</b></div><span class="muted tnum">${fmtT(x.firstTs)}</span></button>` : ''; }).join('') || '<p class="muted">Nobody counted.</p>'}
+    <div class="sub">Not seen on this walk</div>
+    ${missing.map(c => `<button class="item" data-act="cow" data-id="${c.id}"><div class="l">${etag(c)} <b>${esc(c.name || '')}</b></div><span class="muted">${ago(S.lastSeen[c.id])}</span></button>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}
+    <div class="acts" style="margin-top:14px"><button class="btn ghost sm" data-act="expWalk" data-id="${id}">Export (.csv)</button>
+      ${S.session && S.session.id === id ? `<button class="btn danger sm" data-act="endWalk">End walk</button>` : `<button class="btn danger sm" data-act="delWalk" data-id="${id}">Delete walk</button>`}</div>`);
+}
+function confirmSheet(title, body, act, id, danger) {
+  openSheet(`<div class="sh-head"><h2>${esc(title)}</h2></div><p>${esc(body)}</p>
+    <div class="acts"><button class="btn ${danger ? 'danger' : 'accent'}" data-act="${act}" data-id="${id || ''}">Yes, continue</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
+}
+
+/* ============ files in / out ============ */
+const csvCell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+const csv = rows => rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+async function saveFile(name, text, type) {
+  const blob = new Blob([text], {type}), file = new File([blob], name, {type});
+  if (navigator.canShare?.({files: [file]})) { try { await navigator.share({files: [file], title: name}); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const stamp = () => todayStr();
+function herdCsv() {
+  const rows = [['tag', 'name', 'sex', 'birth_date', 'age', 'status', 'breed', 'dam_tag', 'calves', 'latest_calf_date', 'latest_calf_sex', 'last_seen', 'notes']];
+  S.cows.forEach(c => {
+    const k = (c.calves || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0], d = damOf(c);
+    rows.push([c.tag, c.name, sexWord(c.sex), c.birth, ageText(c), c.status, c.breed, d?.tag || '', (c.calves || []).length, k?.date || '', k ? calfWord(k.sex) : '', S.lastSeen[c.id] ? new Date(S.lastSeen[c.id]).toISOString() : '', c.notes]);
+  });
+  return csv(rows);
+}
+function calvingCsv() {
+  const rows = [['dam_tag', 'dam_name', 'calf_date', 'calf_sex', 'calf_tag', 'calf_name', 'notes']];
+  S.cows.forEach(c => (c.calves || []).forEach(k => rows.push([c.tag, c.name, k.date, calfWord(k.sex), k.tag, k.name, k.notes])));
+  return csv(rows);
+}
+function backupJson() {
+  const cows = S.cows.map(c => ({...c, photos: (c.photos || []).map(p => ({...p, vec: p.vec ? Array.from(p.vec, x => +x.toFixed(4)) : null}))}));
+  const set = {...S.set}; delete set.token;
+  return JSON.stringify({app: 'herd-scout', version: 1, exported: Date.now(), cows, sessions: S.sessions, sightings: S.sightings, settings: set});
+}
+async function importJson(text) {
+  const j = JSON.parse(text);
+  if (j.app !== 'herd-scout' || !Array.isArray(j.cows)) throw new Error('This is not a Herd Scout backup');
+  const cows = j.cows.map(c => ({...c, photos: (c.photos || []).map(p => ({...p, vec: p.vec ? new Float32Array(p.vec) : null}))}));
+  await DB.putMany('cows', cows); await DB.putMany('sessions', j.sessions || []); await DB.putMany('sightings', j.sightings || []);
+  S.cows = await DB.all('cows'); S.sessions = await DB.all('sessions'); S.sightings = await DB.all('sightings');
+  S.session = S.sessions.find(s => !s.end) || null; calcSeen(); enqueueAll();
+}
+async function toBitmap(file) {
+  if (window.createImageBitmap) { try { const b = await createImageBitmap(file, {imageOrientation: 'from-image'}); return {src: b, w: b.width, h: b.height}; } catch (e) {} }
+  return new Promise((res, rej) => { const im = new Image(), u = URL.createObjectURL(file); im.onload = () => { res({src: im, w: im.naturalWidth, h: im.naturalHeight}); }; im.onerror = rej; im.src = u; });
+}
+async function handleFiles(files) {
+  const target = S.photoTarget; S.photoTarget = null;
+  for (const f of files) {
+    try {
+      const b = await toBitmap(f);
+      if (target) {
+        const c = cowById(target); if (!c) continue;
+        const {vec} = describe(b.src, b.w, b.h);
+        await addPhoto(c, {vec, thumb: makeThumb(b.src, b.w, b.h)});
+      } else await scanFrame(b.src, b.w, b.h, 'manual');
+    } catch (e) { toast('Could not read that photo'); }
+  }
+  if (target) { toast('Photo added'); openCow(target); }
+}
+
+/* ============ calibration ============ */
+function calibrate() {
+  let cows = S.cows.filter(c => c.status === 'active' && (c.photos || []).some(p => p.vec));
+  if (cows.length > 60) cows = cows.sort(() => Math.random() - .5).slice(0, 60);
+  const intra = [], inter = [];
+  for (const c of cows) { const p = c.photos.filter(x => x.vec); for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) intra.push(dot(p[i].vec, p[j].vec)); }
+  for (let i = 0; i < cows.length; i++) for (let j = i + 1; j < cows.length; j++) {
+    let best = -2; for (const a of cows[i].photos) for (const b of cows[j].photos) if (a.vec && b.vec) best = Math.max(best, dot(a.vec, b.vec)); inter.push(best);
+  }
+  if (intra.length < 5 || inter.length < 5) return {msg: 'Needs at least 6 animals with 2 or more photos each to measure.'};
+  const q = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+  const lowSame = q(intra, .1), highDiff = q(inter, .95), medSame = q(intra, .5), medDiff = q(inter, .5);
+  const clean = lowSame > highDiff;
+  const suggest = Math.min(.97, clean ? (lowSame + highDiff) / 2 : highDiff + .02);
+  return {suggest, msg: `Same animal: typically ${medSame.toFixed(2)} (low end ${lowSame.toFixed(2)}). Different animals: typically ${medDiff.toFixed(2)} (high end ${highDiff.toFixed(2)}). ` + (clean ? 'The two groups separate cleanly.' : 'The groups overlap, so add more photos per animal before trusting auto-count.')};
+}
+
+/* ============ events ============ */
+const fCam = $('#fCam'), fGal = $('#fGal'), fImp = $('#fImp');
+fCam.addEventListener('change', () => { const f = [...fCam.files]; fCam.value = ''; if (f.length) handleFiles(f); });
+fGal.addEventListener('change', () => { const f = [...fGal.files]; fGal.value = ''; if (f.length) handleFiles(f); });
+fImp.addEventListener('change', async () => {
+  const f = fImp.files[0]; fImp.value = ''; if (!f) return;
+  try { await importJson(await f.text()); toast('Backup restored'); render(); } catch (e) { toast(e.message || 'Could not read that file'); }
+});
+$('#scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+$('#autoT').addEventListener('change', e => { S.auto = e.target.checked; if (S.auto && !stream) camOn(); });
+$('#q').addEventListener('input', e => { S.q = e.target.value; clearTimeout(renderHerd.t); renderHerd.t = setTimeout(renderHerd, 120); });
+window.addEventListener('online', () => { S.online = true; renderNet(); sync(false); });
+window.addEventListener('offline', () => { S.online = false; renderNet(); });
+setInterval(() => { if (navigator.onLine && S.pending && S.set.endpoint) sync(false); }, 60000);
+
+function goTab(t) {
+  if (S.tab === 'scan' && t !== 'scan' && stream) { camOff(); S.camWanted = true; }
+  S.tab = t; render();
+  if (t === 'scan' && S.camWanted) { S.camWanted = false; camOn(); }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act, id = b.dataset.id;
+  switch (a) {
+    case 'tab': goTab(b.dataset.tab); break;
+    case 'camOn': camOn(); break;
+    case 'camApp': S.photoTarget = null; fCam.click(); break;
+    case 'shoot':
+      if (stream && video.videoWidth) scanFrame(video, video.videoWidth, video.videoHeight, 'manual'); else { S.photoTarget = null; fCam.click(); }
+      break;
+    case 'startWalk': { const v = $('#field')?.value || ''; S.set.field = v; saveSettings(); await startWalk(v); break; }
+    case 'endWalk': closeSheet(); await endWalk(); break;
+    case 'close': closeSheet(); break;
+    case 'toastAct': $('#toast').hidden = true; toast.fn?.(); break;
+    case 'chip': S.chip = b.dataset.k; renderHerd(); break;
+    case 'cow': openCow(id); break;
+    case 'newCow': openNewAnimal(null, null); break;
+    case 'editCow': { const c = cowById(id); openSheet(`<div class="sh-head"><h2>Edit ${esc(label(c))}</h2><button class="x" data-act="cow" data-id="${id}">Cancel</button></div>${cowForm(c, false)}`); break; }
+    case 'delCow': confirmSheet('Delete this animal?', 'Her record, photos and calving history are removed from this phone.', 'delCowYes', id, true); break;
+    case 'delCowYes': {
+      S.cows = S.cows.filter(c => c.id !== id); await DB.del('cows', id); queue('cow_delete', {id});
+      const gone = S.sightings.filter(x => x.cowId === id); S.sightings = S.sightings.filter(x => x.cowId !== id);
+      await DB.delMany('sightings', gone.map(x => x.id)); calcSeen(); closeSheet(); render(); break;
+    }
+    case 'photoCam': S.photoTarget = id; fCam.click(); break;
+    case 'photoGal': S.photoTarget = id; fGal.click(); break;
+    case 'addCalf': openCalfForm(id); break;
+    case 'delCalf': { const c = cowById(id); c.calves = c.calves.filter(k => k.id !== b.dataset.k); await saveCow(c); openCow(id); break; }
+    case 'pick': await pick(id); break;
+    case 'newFromFrame': { const fr = S.frame, fx = S.fix; openNewAnimal(fr, fx); break; }
+    case 'walk': openWalk(id); break;
+    case 'delWalk': confirmSheet('Delete this walk?', 'The list of who was in the field is removed. Animals are not affected.', 'delWalkYes', id, true); break;
+    case 'delWalkYes': {
+      S.sessions = S.sessions.filter(s => s.id !== id); await DB.del('sessions', id); queue('session_delete', {id});
+      const gone = S.sightings.filter(x => x.sessionId === id); S.sightings = S.sightings.filter(x => x.sessionId !== id);
+      await DB.delMany('sightings', gone.map(x => x.id)); calcSeen(); closeSheet(); render(); break;
+    }
+    case 'expWalk': {
+      const s = S.sessions.find(x => x.id === id), rows = [['tag', 'name', 'first_seen', 'last_seen', 'times', 'lat', 'lng']];
+      S.sightings.filter(x => x.sessionId === id).forEach(x => { const c = cowById(x.cowId); rows.push([c?.tag, c?.name, new Date(x.firstTs).toISOString(), new Date(x.lastTs).toISOString(), x.count, x.lat, x.lng]); });
+      saveFile(`walk-${(s.name || 'field').replace(/\W+/g, '-')}-${stamp()}.csv`, csv(rows), 'text/csv'); break;
+    }
+    case 'syncNow': sync(true); break;
+    case 'expJson': saveFile(`herd-scout-backup-${stamp()}.json`, backupJson(), 'application/json'); break;
+    case 'impJson': fImp.click(); break;
+    case 'expHerd': saveFile(`herd-${stamp()}.csv`, herdCsv(), 'text/csv'); break;
+    case 'expCalv': saveFile(`calving-log-${stamp()}.csv`, calvingCsv(), 'text/csv'); break;
+    case 'calibrate': S.calib = calibrate(); renderSettings(); break;
+    case 'applyCalib': S.set.thr = +S.calib.suggest.toFixed(2); await saveSettings(); S.calib = null; renderSettings(); toast('Threshold updated'); break;
+    case 'wipe': confirmSheet('Erase everything?', 'All animals, photos, walks and settings on this phone are deleted. Export a backup first if you want to keep them.', 'wipeYes', '', true); break;
+    case 'wipeYes':
+      for (const s of STORES) await DB.clear(s);
+      Object.assign(S, {cows: [], sessions: [], sightings: [], pending: 0, session: null, lastSeen: {}, set: {...DEF}}); closeSheet(); render(); break;
+  }
+});
+document.addEventListener('change', async e => {
+  const k = e.target.dataset?.set; if (!k) return;
+  const t = e.target; let v = t.type === 'checkbox' ? t.checked : (t.type === 'range' || k === 'autoMs') ? +t.value : t.value.trim();
+  const hadEndpoint = !!S.set.endpoint; S.set[k] = v; await saveSettings();
+  if (k === 'autoMs' && stream) startAuto();
+  if (k === 'gps') pollGps();
+  if (k === 'endpoint' && v && !hadEndpoint) enqueueAll();
+  renderSettings(); renderNet();
+});
+document.addEventListener('input', e => { if (e.target.dataset?.set && e.target.type === 'range') { const l = e.target.closest('label'); if (l) l.firstChild.textContent = l.firstChild.textContent.replace(/[\d.]+$/, (+e.target.value).toFixed(e.target.dataset.set === 'thr' ? 2 : 2)); } });
+document.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, fd = new FormData(f), kind = f.dataset.form;
+  if (kind === 'cow') {
+    const isNew = f.dataset.new === '1';
+    let c = isNew ? blankCow() : {...cowById(f.dataset.id)};
+    if (isNew) { c.id = f.dataset.id; c.photos = S.frame ? [{id: uid(), thumb: S.frame.thumb, vec: S.frame.vec, ts: Date.now()}] : []; }
+    Object.assign(c, {tag: fd.get('tag').trim(), name: fd.get('name').trim(), sex: fd.get('sex'), birth: fd.get('birth'), breed: fd.get('breed').trim(), status: fd.get('status'), damId: fd.get('damId'), notes: fd.get('notes').trim()});
+    if (!c.tag && !c.name) { toast('Enter an ear tag or a name'); return; }
+    const fix = S.fix, hadFrame = !!S.frame;
+    await saveCow(c);
+    if (hadFrame && isNew) {
+      if (fix) await undoSighting(fix.cowId, fix.sid);
+      await recordSighting(c, 1, 'manual');
+    }
+    closeSheet(); toast('Saved ' + label(c)); render();
+    if (!hadFrame && isNew) openCow(c.id);
+  }
+  if (kind === 'calf') {
+    const c = cowById(f.dataset.id), k = {id: uid(), date: fd.get('date'), sex: fd.get('sex'), tag: fd.get('tag').trim(), name: fd.get('name').trim(), notes: fd.get('notes').trim()};
+    if (fd.get('addHerd')) {
+      const calf = {...blankCow(), tag: k.tag, name: k.name, sex: k.sex, birth: k.date, damId: c.id, breed: c.breed, notes: k.notes};
+      await saveCow(calf); k.calfId = calf.id;
+    }
+    c.calves = [...(c.calves || []), k]; await saveCow(c); toast('Calf saved'); openCow(c.id); render();
+  }
+});
+
+/* ============ boot ============ */
+(async function boot() {
+  await DB.open();
+  try { navigator.storage?.persist?.(); } catch (e) {}
+  S.cows = await DB.all('cows'); S.sessions = await DB.all('sessions'); S.sightings = await DB.all('sightings');
+  const m = await DB.get('meta', 'settings'); if (m) S.set = {...DEF, ...m.v};
+  const ls = await DB.get('meta', 'lastSync'); S.lastSync = ls?.v || null;
+  S.pending = (await DB.all('outbox')).length;
+  S.session = S.sessions.find(s => !s.end) || null; calcSeen(); pollGps(); render();
+  if (S.pending && navigator.onLine) trySync();
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
